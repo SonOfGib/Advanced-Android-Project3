@@ -18,6 +18,7 @@ import android.preference.PreferenceManager;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -55,10 +56,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        if(savedInstanceState != null){
-            mMode = savedInstanceState.getInt(MODE);
-            mMessage = savedInstanceState.getString(MESSAGE);
-        }
+
 
         Intent mIntent = new Intent(this, KeyService.class);
         bindService(mIntent, mConnection, BIND_AUTO_CREATE);
@@ -193,11 +191,20 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     }
 
     @Override
-    public void onSaveInstanceState(Bundle outState, PersistableBundle outPersistentState) {
+    public void onSaveInstanceState(Bundle outState) {
         outState.putString(MESSAGE, mMessage);
         outState.putInt(MODE, mMode);
-        super.onSaveInstanceState(outState, outPersistentState);
+        super.onSaveInstanceState(outState);
 
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        if(savedInstanceState != null){
+            mMode = savedInstanceState.getInt(MODE);
+            mMessage = savedInstanceState.getString(MESSAGE);
+        }
     }
 
     @Override
