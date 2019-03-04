@@ -13,7 +13,9 @@ import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.NfcEvent;
 import android.os.IBinder;
+import android.os.PersistableBundle;
 import android.preference.PreferenceManager;
+import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -24,23 +26,39 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback {
+public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback, MessageSendFragment.OnMessageSetListener {
 
     PendingIntent mPendingIntent;
     NfcAdapter nfcAdapter;
     String username;
     Context mContext;
     SharedPreferences prefs;
+
     final static String USER_PREF_KEY = "USER_PREF_KEY";
-    final static String USER_EXTRA = "USER_EXTRA";
+    final static String MESSAGE = "MESSAGE";
+    final static String MODE = "MODE";
+    final static int KEY_SEND_MODE = 2;
+    final static int MESSAGE_SEND_MODE = 1;
+    final static int MESSAGE_RECIEVE_MODE = 0;
+
+    //Message Display Fragment, Message Send Fragment, Key Share Fragment.
 
     boolean mBounded = false;
     KeyService mKeyService;
+    private String mMessage;
+
+    //mMode keeps track of which fragment is currently visible to the user.
+    int mMode = MESSAGE_RECIEVE_MODE;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        if(savedInstanceState != null){
+            mMode = savedInstanceState.getInt(MODE);
+            mMessage = savedInstanceState.getString(MESSAGE);
+        }
 
         Intent mIntent = new Intent(this, KeyService.class);
         bindService(mIntent, mConnection, BIND_AUTO_CREATE);
@@ -56,13 +74,34 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         //Button submitBtn = findViewById(R.id.submitButton);
 
         updateUsername();
-        Button viewSwap = findViewById(R.id.sendModeButton);
-        viewSwap.setOnClickListener(new View.OnClickListener() {
+        Button viewMsgSwap = findViewById(R.id.sendModeButton);
+        Button viewKeySwap = findViewById(R.id.sendKeysViewButton);
+        viewMsgSwap.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(mContext, MessageActivity.class);
-                intent.putExtra(USER_EXTRA, username);
-                startActivity(intent);
+                if(mMode != MESSAGE_SEND_MODE){
+                    mMode = MESSAGE_SEND_MODE;
+                    //Send this fragment the private key and the username.
+                    MessageSendFragment msgSendFragment = MessageSendFragment.newInstance(username,
+                            "DEBUG KEY", mMessage);
+                    getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
+                            msgSendFragment).commit();
+                }
+            }
+        });
+        viewKeySwap.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                //swap modes if necessary, otherwise do nothing on click.
+                if(mMode != KEY_SEND_MODE) {
+                    mMode = KEY_SEND_MODE;
+                    //Send this fragment the public key and the username.
+                    KeySendFragment keySendFragment = KeySendFragment.newInstance();
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.fragmentHolder, keySendFragment).commit();
+
+                }
             }
         });
 
@@ -149,10 +188,17 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                         .getRecords()[0]
                         .getPayload());
         Toast.makeText(this, "Recieved NFC tag", Toast.LENGTH_LONG).show();
-        TextView disp = findViewById(R.id.messageDisplay);
-        disp.setText(payload);
+        //TextView disp = findViewById(R.id.messageDisplay);
+        //disp.setText(payload);
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle outState, PersistableBundle outPersistentState) {
+        outState.putString(MESSAGE, mMessage);
+        outState.putInt(MODE, mMode);
+        super.onSaveInstanceState(outState, outPersistentState);
+
+    }
 
     @Override
     public NdefMessage createNdefMessage(NfcEvent event) {
@@ -190,5 +236,11 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             unbindService(mConnection);
             mBounded = false;
         }
+    }
+
+    @Override
+    public void onMessageSet(String message) {
+        Toast.makeText(this,"Message set.", Toast.LENGTH_SHORT).show();
+        mMessage = message;
     }
 }
