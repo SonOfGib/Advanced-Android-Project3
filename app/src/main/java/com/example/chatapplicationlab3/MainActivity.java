@@ -31,6 +31,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.reflect.TypeToken;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -81,13 +84,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             Type type = new TypeToken<ArrayList<Message>>(){}.getType();
             mMessages = gson.fromJson(messageJson, type);
         }
-        mMode = MESSAGE_RECIEVE_MODE;
-        MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
-                1, mMessages);
-        mRecieveFragment = msgRecvFragment;
-        getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
-                msgRecvFragment).commit();
-
+        swapInMessageRecieveFrag();
 
         mContext = this;
         Intent intent = new Intent(this, MainActivity.class);
@@ -103,13 +100,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         viewMsgDispSwap.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(mMode != MESSAGE_RECIEVE_MODE){
-                    mMode = MESSAGE_RECIEVE_MODE;
-                    MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
-                            1, mMessages);
-                    mRecieveFragment = msgRecvFragment;
-                    getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
-                            msgRecvFragment).commit();
+                if(mMode != MESSAGE_RECIEVE_MODE) {
+                    swapInMessageRecieveFrag();
                 }
             }
         });
@@ -185,7 +177,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 dialog.dismiss();
                 String localUsername = usernameBox.getText().toString();
                 //Check to make sure we arent entering the same username again.
-                if(!username.equals(localUsername)) {
+
+                if(username== null || !username.equals(localUsername)) {
                     //Generate keys with our username.
                     //TODO Consider saving previous username-keypairs in case the user wants to swap back.
                     mKeyService.generateMyKeys();
@@ -217,6 +210,16 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         super.onResume();
         updateUsername();
         nfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if(mKeyService == null || mConnection == null){
+            Intent mIntent = new Intent(this, KeyService.class);
+            bindService(mIntent, mConnection, BIND_AUTO_CREATE);
+
+        }
         if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(getIntent().getAction())) {
             readPayload(getIntent());
         }
@@ -241,27 +244,70 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                         .getPayload());
         Toast.makeText(this, "Recieved NFC tag", Toast.LENGTH_LONG).show();
 
-        //Add message to list and then show messageFragment
-        Log.d("Message was", payload);
-
-
-        //TODO parse json to find out what we got.
-        Message message = new Message("some guy", payload);
-        if(mMessages != null){
-            mMessages.add(message);
+        //Lop off the 'en' language code.
+        String jsonString = payload.substring(3);
+        Log.d("Tag debug", jsonString);
+        if(jsonString.equals("")){
+            Log.d("Message Recieved?", "Message was empty!");
         }
-        else{
-            mMessages = new ArrayList<>();
-            mMessages.add(message);
+        else {
+            //Determine which json payload we've got here.
+
+            try {
+                JSONObject json = new JSONObject(jsonString);
+                if(json.has("message")){
+                    manageMessageJSON(json);
+                }
+                else if (json.has("key")){
+                    manageKeyJson(json);
+                }
+                //else do nothing bc json is messed up.
+            } catch (JSONException e) {
+                Log.e("JSON Exception", "Convert problem", e);
+            }
         }
+    }
+
+    private void manageKeyJson(JSONObject json){
+        try {
+            String owner = json.getString("user");
+            String pemKey = json.getString("key");
+
+            mKeyService.storePublicKeyPEM(owner, pemKey);
+
+        }
+        catch (JSONException e){
+            Log.e("JSON Exception", "Key Problem", e);
+        }
+
+    }
+    private void swapInMessageRecieveFrag(){
         mMode = MESSAGE_RECIEVE_MODE;
+
         MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
                 1, mMessages);
         mRecieveFragment = msgRecvFragment;
 
         getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
                 msgRecvFragment).commit();
+    }
 
+    private void manageMessageJSON(JSONObject json) {
+        try {
+            String sender = json.getString("from");
+            String content = json.getString("message");
+            //TODO Decrypt this message!
+            Message message = new Message(sender, content);
+            if (mMessages != null) {
+                mMessages.add(message);
+            } else {
+                mMessages = new ArrayList<>();
+                mMessages.add(message);
+            }
+            swapInMessageRecieveFrag();
+        }catch (JSONException e){
+            Log.e("JSON Exception", "Message Problem", e);
+        }
     }
 
     @Override
@@ -296,7 +342,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 Log.d("SEND NDEF WRITE", "User tried to send NDEF in write mode.");
                 //TODO Deal with partnername info.
                 //TODO encrypt message.
-                payload = "{\"to\":\"partnername\",\"from\":\"username\",\"message\""+
+                payload = "{\"to\":\"partnername\",\"from\":\""+ username + "\",\"message\""+
                         ":\""+ mMessage +"\"}";
                 break;
             case KEY_SEND_MODE:
@@ -335,6 +381,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         public void onServiceConnected(ComponentName name, IBinder service) {
             mBounded = true;
             KeyService.LocalBinder mLocalBinder = (KeyService.LocalBinder) service;
+
             mKeyService = mLocalBinder.getService();
         }
     };

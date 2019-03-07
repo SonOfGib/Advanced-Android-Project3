@@ -10,10 +10,12 @@ import android.util.Base64;
 import android.util.Log;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONObject;
 
 
+import java.lang.reflect.Type;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -97,6 +99,7 @@ public class KeyService extends Service {
         prefs.edit().putString(PARTNER_MAP_PREF, mapString).apply();
     }
 
+    //This is for use for OUR key pair only!
     private KeyPair pemToKeys(String pem){
         String[] stringKeys = pem.split("-----END PRIVATE KEY-----\n-----BEGIN PUBLIC KEY-----\n");
         String pemPrivateKey = stringKeys[0].replace("-----BEGIN PRIVATE KEY-----\n","");
@@ -121,6 +124,10 @@ public class KeyService extends Service {
 
     }
 
+    /**
+     * Provides the public key of our user in PEM format.
+     * @return A PEM formatted public key.
+     */
     String getMyPublicKey(){
         if(keys != null){
             PublicKey key = keys.getPublic();
@@ -193,10 +200,9 @@ public class KeyService extends Service {
         String jsonString = prefs.getString(PARTNER_MAP_PREF, "");
         String pemString = prefs.getString(PEM_FILE_PREF, "");
         Gson gson = new Gson();
-        HashMap<String, String> map = new HashMap<>();
         if(!jsonString.equals("")) {
-            map = (HashMap<String, String>) gson.fromJson(jsonString, map.getClass());
-            partnerKeys = map;
+            Type type = new TypeToken<HashMap<String, String>>(){}.getType();
+            partnerKeys = gson.fromJson(jsonString, type);
         }
         Log.d("PEM EXISTS?",""+!pemString.equals(""));
         if(!pemString.equals("")){
