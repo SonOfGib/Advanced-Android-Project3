@@ -12,33 +12,31 @@ import android.util.Log;
 import com.google.gson.Gson;
 
 import org.json.JSONObject;
-import java.lang.reflect.Type;
 
-import java.io.IOException;
-import java.math.BigInteger;
+
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
+
+import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.RSAPrivateKeySpec;
-import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
 
 import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
 
 public class KeyService extends Service {
-    KeyPairGenerator kpg;
     KeyPair keys;
+    String PEMFile;
     Cipher cipher;
-    BigInteger modulus;
     HashMap<String,String> partnerKeys;
     SharedPreferences prefs;
     private final IBinder mBinder = new LocalBinder();
     final String PARTNER_MAP_PREF = "PARTNER_MAP_PREF";
+    final String PEM_FILE_PREF = "PEM_FILE_PREF";
     /**
      * Class for clients to access.  Because we know this service always
      * runs in the same process as its clients, we don't need to deal with
@@ -55,32 +53,38 @@ public class KeyService extends Service {
         partnerKeys = new HashMap<>();
     }
 
-    KeyPair generateMyKeys(){
+    //Generate PEM pair of private and public key.
+    void generateMyKeys(){
         try {
-            kpg = KeyPairGenerator.getInstance("RSA");
-            keys = kpg.generateKeyPair();
-            KeyFactory fact = KeyFactory.getInstance("RSA");
-            cipher = Cipher.getInstance("RSA");
-            RSAPrivateKey privateKey = (RSAPrivateKey) keys.getPrivate();
-            RSAPublicKey publicKey = (RSAPublicKey) keys.getPublic();
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            KeyPair pair = kpg.generateKeyPair();
+            //Construct PEM file
+            StringBuilder builder = new StringBuilder();
+            builder.append("-----BEGIN PRIVATE KEY-----\n");
+            builder.append(Base64.encodeToString(pair.getPrivate().getEncoded(), Base64.DEFAULT));
+            builder.append("-----END PRIVATE KEY-----\n");
+            builder.append("-----BEGIN PUBLIC KEY-----\n");
+            builder.append(Base64.encodeToString(pair.getPublic().getEncoded(), Base64.DEFAULT));
+            builder.append("-----END PUBLIC KEY-----");
+            String myPEMFile = builder.toString();
+            Log.d("PEM", myPEMFile);
+            keys = pair;
+            PEMFile = myPEMFile;
 
-            String privateKeyString = privateKey.getPrivateExponent().toString();
-            String publicKeyString = publicKey.getPublicExponent().toString();
-
-            Log.d("Public", publicKeyString);
-            Log.d("Private", privateKeyString);
-            Log.d("Mod", publicKey.getModulus().toString());
-            RSAPrivateKeySpec privKeySpec = new RSAPrivateKeySpec(privateKey.getModulus(), new BigInteger(privateKeyString));
-            privateKey = (RSAPrivateKey) fact.generatePrivate(privKeySpec);
-            RSAPublicKeySpec pubKeySpec = new RSAPublicKeySpec(publicKey.getModulus(), new BigInteger(publicKeyString));
-            modulus = publicKey.getModulus();
-            publicKey = (RSAPublicKey) fact.generatePublic(pubKeySpec);
-
-            return keys;
-        }catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeySpecException e) {
-            e.printStackTrace();
-            return null;
         }
+        catch (NoSuchAlgorithmException e){
+            Log.wtf("Encryption Problem", e);
+        }
+    }
+
+    void storePublicKeyPEM(String partnerName, String PEM){
+        String pubKeyPEM = PEM.replace("-----BEGIN PUBLIC KEY-----\n", "");
+        pubKeyPEM = pubKeyPEM.replace("-----END PUBLIC KEY-----", "");
+
+        // Base64 decode the data
+
+        //byte [] encoded = Base64.decode(pubKeyPEM, Base64.DEFAULT);
+        storePublicKey(partnerName, pubKeyPEM);
     }
 
     void storePublicKey(String partnerName, String publicKey){
@@ -90,16 +94,41 @@ public class KeyService extends Service {
         prefs.edit().putString(PARTNER_MAP_PREF, mapString).apply();
     }
 
-    RSAPublicKey getPublicKey(String partnerName){
-        String pubkey = (String) partnerKeys.get(partnerName);
-        RSAPublicKeySpec pubKeySpec = new RSAPublicKeySpec(modulus,new BigInteger(pubkey));
+    private KeyPair pemToKeys(String pem){
+        String[] stringKeys = pem.split("-----END PRIVATE KEY-----\n-----BEGIN PUBLIC KEY-----\n");
+        String pemPrivateKey = stringKeys[0].replace("-----BEGIN PRIVATE KEY-----\n","");
+        String pemPublicKey = stringKeys[1].replace("-----END PUBLIC KEY-----","");
+
+
         try {
-            KeyFactory fact = KeyFactory.getInstance("RSA");
-            return (RSAPublicKey) fact.generatePublic(pubKeySpec);
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            e.printStackTrace();
+            byte[] encodedPrivateKey = Base64.decode(pemPrivateKey, Base64.DEFAULT);
+            X509EncodedKeySpec privSpec = new X509EncodedKeySpec(encodedPrivateKey);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            RSAPrivateKey rsaPrivateKey = (RSAPrivateKey) keyFactory.generatePrivate(privSpec);
+            byte[] encodedPublicKey = Base64.decode(pemPublicKey, Base64.DEFAULT);
+            X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(encodedPrivateKey);
+            RSAPublicKey rsaPublicKey = (RSAPublicKey) keyFactory.generatePublic(pubSpec);
+            KeyPair keyPair = new KeyPair(rsaPublicKey,rsaPrivateKey);
+            return keyPair;
+        }catch (NoSuchAlgorithmException| InvalidKeySpecException e){
+            Log.e("Encryption", "Conversion problem", e);
             return null;
         }
+
+    }
+
+    RSAPublicKey getPublicKey(String partnerName){
+        String pubkey = (String) partnerKeys.get(partnerName);
+        byte[] encoded = Base64.decode(pubkey, Base64.DEFAULT);
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(encoded);
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            RSAPublicKey key = (RSAPublicKey)keyFactory.generatePublic(spec);
+            return key;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+
     }
 
     /**
@@ -109,7 +138,7 @@ public class KeyService extends Service {
      * @return The cipher text.
      */
     public String encrypt(String plainText, String partnerName){
-        RSAPublicKey publicKey = getPublicKey(partnerName);
+        PublicKey publicKey = getPublicKey(partnerName);
         try{
             cipher.init(Cipher.ENCRYPT_MODE, publicKey);
             byte[] encryptedText = cipher.doFinal(plainText.getBytes());
@@ -145,11 +174,16 @@ public class KeyService extends Service {
         super.onCreate();
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         String jsonString = prefs.getString(PARTNER_MAP_PREF, "");
+        String pemString = prefs.getString(PEM_FILE_PREF, "");
         Gson gson = new Gson();
         HashMap<String, String> map = new HashMap<>();
         if(!jsonString.equals("")) {
             map = (HashMap<String, String>) gson.fromJson(jsonString, map.getClass());
             partnerKeys = map;
+        }
+        if(!pemString.equals("")){
+            PEMFile = pemString;
+            keys = pemToKeys(PEMFile);
         }
     }
 

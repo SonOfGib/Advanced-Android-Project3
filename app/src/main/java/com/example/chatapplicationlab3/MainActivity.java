@@ -27,6 +27,11 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+
+import java.util.ArrayList;
+
 public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback, MessageSendFragment.OnMessageSetListener {
 
     PendingIntent mPendingIntent;
@@ -37,17 +42,19 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
     final static String USER_PREF_KEY = "USER_PREF_KEY";
     final static String MESSAGE = "MESSAGE";
+    final static String MESSAGES = "MESSAGES";
     final static String MODE = "MODE";
     final static int KEY_SEND_MODE = 2;
     final static int MESSAGE_SEND_MODE = 1;
     final static int MESSAGE_RECIEVE_MODE = 0;
 
+
     //Message Display Fragment, Message Send Fragment, Key Share Fragment.
 
-    boolean mBounded = false;
-    KeyService mKeyService;
+    private boolean mBounded = false;
+    private KeyService mKeyService;
     private String mMessage;
-
+    private ArrayList<Message> mMessages = new ArrayList<>();
     //mMode keeps track of which fragment is currently visible to the user.
     int mMode = MESSAGE_RECIEVE_MODE;
 
@@ -74,6 +81,19 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         updateUsername();
         Button viewMsgSwap = findViewById(R.id.sendModeButton);
         Button viewKeySwap = findViewById(R.id.sendKeysViewButton);
+        Button viewMsgDispSwap = findViewById(R.id.viewMessageButton);
+        viewMsgDispSwap.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(mMode != MESSAGE_RECIEVE_MODE){
+                    mMode = MESSAGE_RECIEVE_MODE;
+                    MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(1);
+
+                    getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
+                            msgRecvFragment).commit();
+                }
+            }
+        });
         viewMsgSwap.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -115,9 +135,11 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
     private void updateUsername() {
         Button viewSwap = findViewById(R.id.sendModeButton);
+        Button keySwap = findViewById(R.id.sendKeysViewButton);
         username = prefs.getString(USER_PREF_KEY, null);
         if (username == null) {
             viewSwap.setEnabled(false);
+            keySwap.setEnabled(false);
             Toast.makeText(this, "No username found, please set one!",
                     Toast.LENGTH_SHORT).show();
         } else {
@@ -142,9 +164,15 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
                 String localUsername = usernameBox.getText().toString();
-                boolean committed = prefs.edit().putString(USER_PREF_KEY, localUsername).commit();
-                if (committed) {
-                    username = localUsername;
+                //Check to make sure we arent entering the same username again.
+                if(!username.equals(localUsername)) {
+                    //Generate keys with our username.
+                    //TODO Consider saving previous username-keypairs in case the user wants to swap back.
+                    mKeyService.generateMyKeys();
+                    boolean committed = prefs.edit().putString(USER_PREF_KEY, localUsername).commit();
+                    if (committed) {
+                        username = localUsername;
+                    }
                 }
             }
         });
@@ -186,6 +214,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                         .getRecords()[0]
                         .getPayload());
         Toast.makeText(this, "Recieved NFC tag", Toast.LENGTH_LONG).show();
+        //Add message to list and then show messageFragment
+        Log.d("Message was", payload);
         //TextView disp = findViewById(R.id.messageDisplay);
         //disp.setText(payload);
     }
@@ -194,6 +224,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     public void onSaveInstanceState(Bundle outState) {
         outState.putString(MESSAGE, mMessage);
         outState.putInt(MODE, mMode);
+        outState.putParcelableArrayList(MESSAGES, mMessages);
         super.onSaveInstanceState(outState);
 
     }
@@ -204,12 +235,32 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         if(savedInstanceState != null){
             mMode = savedInstanceState.getInt(MODE);
             mMessage = savedInstanceState.getString(MESSAGE);
+            mMessages = savedInstanceState.getParcelableArrayList(MESSAGES);
         }
     }
 
     @Override
     public NdefMessage createNdefMessage(NfcEvent event) {
-        NdefRecord record = NdefRecord.createTextRecord(null, "Debug message");
+        String payload = "";
+        switch(mMode){
+            case MESSAGE_RECIEVE_MODE:
+                //Uh do nothing?
+                Log.d("RECIEVE NDEF WRITE", "User tried to send NDEF in recieve mode.");
+                break;
+            case MESSAGE_SEND_MODE:
+                //Send currently 'set' message
+                Log.d("SEND NDEF WRITE", "User tried to send NDEF in write mode.");
+                //TODO Deal with partnername info.
+                //TODO encrypt message.
+                payload = "{\"to\":\"partnername\",\"from\":\"username\",\"message\""+
+                        ":\""+ mMessage +"\"}";
+                break;
+            case KEY_SEND_MODE:
+                //Send currently 'set' message
+                Log.d("KEY NDEF WRITE", "User tried to send NDEF in key mode.");
+                break;
+        }
+        NdefRecord record = NdefRecord.createTextRecord(null, payload);
         NdefMessage msg = new NdefMessage(new NdefRecord[]{record});
 
         return msg;
