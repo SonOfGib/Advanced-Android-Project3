@@ -29,10 +29,14 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback, MessageSendFragment.OnMessageSetListener {
+
 
     private PendingIntent mPendingIntent;
     private NfcAdapter nfcAdapter;
@@ -41,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     private SharedPreferences prefs;
 
     private final static String USER_PREF_KEY = "USER_PREF_KEY";
+    private static final String KEY_MESSAGES = "KEY_MESSAGES";
     private final static String MESSAGE = "MESSAGE";
     private final static String MESSAGES = "MESSAGES";
     private final static String MODE = "MODE";
@@ -70,6 +75,18 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         bindService(mIntent, mConnection, BIND_AUTO_CREATE);
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String messageJson = prefs.getString(KEY_MESSAGES, "");
+        if(!messageJson.equals("")){
+            Gson gson = new Gson();
+            Type type = new TypeToken<ArrayList<Message>>(){}.getType();
+            mMessages = gson.fromJson(messageJson, type);
+        }
+        mMode = MESSAGE_RECIEVE_MODE;
+        MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
+                1, mMessages);
+        mRecieveFragment = msgRecvFragment;
+        getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
+                msgRecvFragment).commit();
 
 
         mContext = this;
@@ -209,6 +226,11 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     protected void onPause() {
         super.onPause();
         nfcAdapter.disableForegroundDispatch(this);
+        //save messages object.
+        Gson gson = new Gson();
+        String jsonString = gson.toJson(mMessages);
+
+        prefs.edit().putString(KEY_MESSAGES, jsonString).apply();
 
     }
 
@@ -232,21 +254,14 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             mMessages = new ArrayList<>();
             mMessages.add(message);
         }
-        Log.d("mMode is?",""+mMode);
-        //if(mMode != MESSAGE_RECIEVE_MODE){
-            mMode = MESSAGE_RECIEVE_MODE;
-            MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
-                    1, mMessages);
-            mRecieveFragment = msgRecvFragment;
+        mMode = MESSAGE_RECIEVE_MODE;
+        MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
+                1, mMessages);
+        mRecieveFragment = msgRecvFragment;
 
-            getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
-                    msgRecvFragment).commit();
-        //}
-        //else {
-        //    mRecieveFragment.addAdapterItem(message);
-        //}
-        //TextView disp = findViewById(R.id.messageDisplay);
-        //disp.setText(payload);
+        getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
+                msgRecvFragment).commit();
+
     }
 
     @Override
