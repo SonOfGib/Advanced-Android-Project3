@@ -6,15 +6,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import com.example.chatapplicationlab3.dummy.DummyContent.DummyItem;
 
 import java.util.List;
 
 public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHolder> {
 
-    private final List<DummyItem> mValues;
+    private final List<Message> mValues;
 
-    public MessagesAdapter(List<DummyItem> items) {
+    MessagesAdapter(List<Message> items) {
         mValues = items;
     }
 
@@ -28,8 +27,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
     @Override
     public void onBindViewHolder(final ViewHolder holder, int position) {
         holder.mItem = mValues.get(position);
-        holder.mIdView.setText(mValues.get(position).id);
-        holder.mContentView.setText(mValues.get(position).content);
+        String author = mValues.get(position).getSender() + ":";
+        holder.mIdView.setText(author);
+        holder.mContentView.setText(mValues.get(position).getContent());
 
     }
 
@@ -38,11 +38,16 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesAdapter.ViewHo
         return mValues.size();
     }
 
+    public void addItem(Message message){
+        mValues.add(message);
+        notifyItemChanged(mValues.size()-1);
+    }
+
     public class ViewHolder extends RecyclerView.ViewHolder {
         final View mView;
         final TextView mIdView;
         final TextView mContentView;
-        DummyItem mItem;
+        Message mItem;
 
         ViewHolder(View view) {
             super(view);

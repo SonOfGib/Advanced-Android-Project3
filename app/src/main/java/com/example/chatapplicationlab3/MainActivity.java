@@ -34,19 +34,19 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback, MessageSendFragment.OnMessageSetListener {
 
-    PendingIntent mPendingIntent;
-    NfcAdapter nfcAdapter;
-    String username;
-    Context mContext;
-    SharedPreferences prefs;
+    private PendingIntent mPendingIntent;
+    private NfcAdapter nfcAdapter;
+    private String username;
+    private Context mContext;
+    private SharedPreferences prefs;
 
-    final static String USER_PREF_KEY = "USER_PREF_KEY";
-    final static String MESSAGE = "MESSAGE";
-    final static String MESSAGES = "MESSAGES";
-    final static String MODE = "MODE";
-    final static int KEY_SEND_MODE = 2;
-    final static int MESSAGE_SEND_MODE = 1;
-    final static int MESSAGE_RECIEVE_MODE = 0;
+    private final static String USER_PREF_KEY = "USER_PREF_KEY";
+    private final static String MESSAGE = "MESSAGE";
+    private final static String MESSAGES = "MESSAGES";
+    private final static String MODE = "MODE";
+    private final static int KEY_SEND_MODE = 2;
+    private final static int MESSAGE_SEND_MODE = 1;
+    private final static int MESSAGE_RECIEVE_MODE = 0;
 
 
     //Message Display Fragment, Message Send Fragment, Key Share Fragment.
@@ -54,9 +54,10 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     private boolean mBounded = false;
     private KeyService mKeyService;
     private String mMessage;
+    private MessageRecieveFragment mRecieveFragment;
     private ArrayList<Message> mMessages = new ArrayList<>();
     //mMode keeps track of which fragment is currently visible to the user.
-    int mMode = MESSAGE_RECIEVE_MODE;
+    private int mMode = MESSAGE_RECIEVE_MODE;
 
 
     @Override
@@ -87,8 +88,9 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             public void onClick(View v) {
                 if(mMode != MESSAGE_RECIEVE_MODE){
                     mMode = MESSAGE_RECIEVE_MODE;
-                    MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(1);
-
+                    MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
+                            1, mMessages);
+                    mRecieveFragment = msgRecvFragment;
                     getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
                             msgRecvFragment).commit();
                 }
@@ -114,8 +116,9 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 //swap modes if necessary, otherwise do nothing on click.
                 if(mMode != KEY_SEND_MODE) {
                     mMode = KEY_SEND_MODE;
+                    Log.d("mMode is ?", ""+mMode);
                     //Send this fragment the public key and the username.
-                    KeySendFragment keySendFragment = KeySendFragment.newInstance();
+                    KeySendFragment keySendFragment = KeySendFragment.newInstance(mKeyService.getMyPublicKey());
                     getSupportFragmentManager().beginTransaction()
                             .replace(R.id.fragmentHolder, keySendFragment).commit();
 
@@ -206,6 +209,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     protected void onPause() {
         super.onPause();
         nfcAdapter.disableForegroundDispatch(this);
+
     }
 
     void readPayload(Intent intent) {
@@ -214,8 +218,33 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                         .getRecords()[0]
                         .getPayload());
         Toast.makeText(this, "Recieved NFC tag", Toast.LENGTH_LONG).show();
+
         //Add message to list and then show messageFragment
         Log.d("Message was", payload);
+
+
+        //TODO parse json to find out what we got.
+        Message message = new Message("some guy", payload);
+        if(mMessages != null){
+            mMessages.add(message);
+        }
+        else{
+            mMessages = new ArrayList<>();
+            mMessages.add(message);
+        }
+        Log.d("mMode is?",""+mMode);
+        //if(mMode != MESSAGE_RECIEVE_MODE){
+            mMode = MESSAGE_RECIEVE_MODE;
+            MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
+                    1, mMessages);
+            mRecieveFragment = msgRecvFragment;
+
+            getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
+                    msgRecvFragment).commit();
+        //}
+        //else {
+        //    mRecieveFragment.addAdapterItem(message);
+        //}
         //TextView disp = findViewById(R.id.messageDisplay);
         //disp.setText(payload);
     }
@@ -258,6 +287,14 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             case KEY_SEND_MODE:
                 //Send currently 'set' message
                 Log.d("KEY NDEF WRITE", "User tried to send NDEF in key mode.");
+                String pubKey = mKeyService.getMyPublicKey();
+                if(pubKey.equals("")){
+                    Log.d("SEND EMPTY KEY", "KEY WAS EMPTY!");
+                }
+                else{
+                    payload = "{\"user\":\""+ username +"\",\"key\":\""+ pubKey +"\"}";
+                    Log.d("SENT KEY PAYLOAD", payload);
+                }
                 break;
         }
         NdefRecord record = NdefRecord.createTextRecord(null, payload);
@@ -286,7 +323,6 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             mKeyService = mLocalBinder.getService();
         }
     };
-
     @Override
     protected void onStop() {
         super.onStop();

@@ -13,6 +13,14 @@ class Message implements Parcelable {
         this.content = content;
     }
 
+    public String getContent() {
+        return content;
+    }
+
+    public String getSender() {
+        return sender;
+    }
+
     private Message(Parcel in) {
         String[] data = new String[2];
         in.readStringArray(data);

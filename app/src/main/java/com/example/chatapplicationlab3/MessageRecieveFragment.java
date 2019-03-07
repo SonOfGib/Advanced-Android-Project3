@@ -10,17 +10,19 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.example.chatapplicationlab3.dummy.DummyContent;
-import com.example.chatapplicationlab3.dummy.DummyContent.DummyItem;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MessageRecieveFragment extends Fragment {
 
     // TODO: Customize parameter argument names
     private static final String ARG_COLUMN_COUNT = "column-count";
+    private static final String ARG_MESSAGES = "messages";
     // TODO: Customize parameters
     private int mColumnCount = 1;
+    private MessagesAdapter mMessagesAdapter;
+    private ArrayList<Message> messagesArrayList;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -29,12 +31,17 @@ public class MessageRecieveFragment extends Fragment {
     public MessageRecieveFragment() {
     }
 
+    public void addAdapterItem(Message message){
+        mMessagesAdapter.addItem(message);
+    }
+
     // TODO: Customize parameter initialization
     @SuppressWarnings("unused")
-    public static MessageRecieveFragment newInstance(int columnCount) {
+    public static MessageRecieveFragment newInstance(int columnCount, ArrayList<Message> messageArrayList) {
         MessageRecieveFragment fragment = new MessageRecieveFragment();
         Bundle args = new Bundle();
         args.putInt(ARG_COLUMN_COUNT, columnCount);
+        args.putParcelableArrayList(ARG_MESSAGES, messageArrayList);
         fragment.setArguments(args);
         return fragment;
     }
@@ -45,6 +52,7 @@ public class MessageRecieveFragment extends Fragment {
 
         if (getArguments() != null) {
             mColumnCount = getArguments().getInt(ARG_COLUMN_COUNT);
+            messagesArrayList = getArguments().getParcelableArrayList(ARG_MESSAGES);
         }
     }
 
@@ -62,7 +70,8 @@ public class MessageRecieveFragment extends Fragment {
             } else {
                 recyclerView.setLayoutManager(new GridLayoutManager(context, mColumnCount));
             }
-            recyclerView.setAdapter(new MessagesAdapter(DummyContent.ITEMS));
+            mMessagesAdapter = new MessagesAdapter(messagesArrayList);
+            recyclerView.setAdapter(mMessagesAdapter);
         }
         return view;
     }
