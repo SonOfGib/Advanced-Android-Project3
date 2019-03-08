@@ -62,12 +62,13 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     private boolean mBounded = false;
     private KeyService mKeyService;
     private String mMessage;
-    private MessageRecieveFragment mRecieveFragment;
     private ArrayList<Message> mMessages = new ArrayList<>();
     //mMode keeps track of which fragment is currently visible to the user.
     private int mMode = MESSAGE_RECIEVE_MODE;
 
-
+    private boolean mStoreKeyWhenReady = false;
+    private String mTempOwner;
+    private String mTempPemKey;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -209,20 +210,11 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     protected void onResume() {
         super.onResume();
         updateUsername();
-        nfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        if(mKeyService == null || mConnection == null){
-            Intent mIntent = new Intent(this, KeyService.class);
-            bindService(mIntent, mConnection, BIND_AUTO_CREATE);
-
-        }
+        Log.d("mConnection is null?", ""+ (mConnection == null));
         if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(getIntent().getAction())) {
             readPayload(getIntent());
         }
+        nfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
     }
 
     @Override
@@ -272,9 +264,13 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
         try {
             String owner = json.getString("user");
             String pemKey = json.getString("key");
-
-            mKeyService.storePublicKeyPEM(owner, pemKey);
-
+            if(mBounded)
+                mKeyService.storePublicKeyPEM(owner, pemKey);
+            else{
+                mStoreKeyWhenReady = true;
+                mTempOwner = owner;
+                mTempPemKey = pemKey;
+            }
         }
         catch (JSONException e){
             Log.e("JSON Exception", "Key Problem", e);
@@ -286,7 +282,6 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
         MessageRecieveFragment msgRecvFragment = MessageRecieveFragment.newInstance(
                 1, mMessages);
-        mRecieveFragment = msgRecvFragment;
 
         getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
                 msgRecvFragment).commit();
@@ -383,6 +378,12 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             KeyService.LocalBinder mLocalBinder = (KeyService.LocalBinder) service;
 
             mKeyService = mLocalBinder.getService();
+            //If we have been requested to store a key on connection ...
+            if(mStoreKeyWhenReady){
+                mStoreKeyWhenReady = false;
+                if(mTempOwner != null && mTempPemKey != null)
+                    mKeyService.storePublicKeyPEM(mTempOwner, mTempPemKey);
+            }
         }
     };
     @Override

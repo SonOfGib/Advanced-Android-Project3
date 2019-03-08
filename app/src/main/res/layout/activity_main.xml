@@ -8,12 +8,13 @@
 
     <Button
         android:id="@+id/setUsernameButton"
-        android:layout_width="123dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="8dp"
         android:text="Set Username"
+        android:textSize="10sp"
         app:layout_constraintBottom_toTopOf="@+id/fragmentHolder"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/usernameDisplayLabel"
@@ -53,6 +54,7 @@
         android:text="Send Message View"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/sendKeysViewButton"
+        app:layout_constraintHorizontal_chainStyle="packed"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/fragmentHolder" />
 
