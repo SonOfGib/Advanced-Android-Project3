@@ -28,7 +28,9 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 
 import javax.crypto.Cipher;
 
@@ -209,6 +211,14 @@ public class KeyService extends Service {
             PEMFile = pemString;
             keys = pemToKeys(PEMFile);
         }
+    }
+
+    /**
+     * Returns a set of the partners stored in the partner-key map.
+     * @return Set of partner name Strings.
+     */
+    public ArrayList<String> getSavedPartners(){
+        return new ArrayList<>(partnerKeys.keySet());
     }
 
 

@@ -69,6 +69,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     private boolean mStoreKeyWhenReady = false;
     private String mTempOwner;
     private String mTempPemKey;
+    private String mPartner;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -113,7 +115,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                     mMode = MESSAGE_SEND_MODE;
                     //Send this fragment the private key and the username.
                     MessageSendFragment msgSendFragment = MessageSendFragment.newInstance(username,
-                            "DEBUG KEY", mMessage);
+                            mMessage, mKeyService.getSavedPartners());
                     getSupportFragmentManager().beginTransaction().replace(R.id.fragmentHolder,
                             msgSendFragment).commit();
                 }
@@ -335,10 +337,12 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             case MESSAGE_SEND_MODE:
                 //Send currently 'set' message
                 Log.d("SEND NDEF WRITE", "User tried to send NDEF in write mode.");
-                //TODO Deal with partnername info.
                 //TODO encrypt message.
-                payload = "{\"to\":\"partnername\",\"from\":\""+ username + "\",\"message\""+
-                        ":\""+ mMessage +"\"}";
+                if(mMessage != null && mPartner != null){
+                    payload = "{\"to\":\"" + mPartner + "\",\"from\":\""+ username + "\",\"message\""+
+                            ":\""+ mMessage +"\"}";
+                }
+
                 break;
             case KEY_SEND_MODE:
                 //Send currently 'set' message
@@ -396,8 +400,9 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     }
 
     @Override
-    public void onMessageSet(String message) {
+    public void onMessageSet(String message, String partner) {
         Toast.makeText(this,"Message set.", Toast.LENGTH_SHORT).show();
         mMessage = message;
+        mPartner = partner;
     }
 }

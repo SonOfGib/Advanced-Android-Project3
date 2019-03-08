@@ -7,8 +7,14 @@ import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
+
+import java.util.ArrayList;
+import java.util.HashSet;
 
 
 /**
@@ -25,11 +31,13 @@ public class MessageSendFragment extends Fragment {
     private static final String PRIVATE_KEY = "PRIVATE_KEY";
 
     private static final String MESSAGE = "MESSAGE";
+    private static final String PARTNERS = "PARTNERS";
 
     // TODO: Rename and change types of parameters
     private String mUsername;
-    private String mPrivateKey;
+    private ArrayList<String> mPartnerList;
     private String mMessage;
+    private String mPartner;
 
     private OnMessageSetListener mListener;
 
@@ -38,12 +46,13 @@ public class MessageSendFragment extends Fragment {
     }
 
 
-    public static MessageSendFragment newInstance(String username, String privateKey, String message) {
+    public static MessageSendFragment newInstance(String username, String message,
+                                                  ArrayList<String> parnters) {
         MessageSendFragment fragment = new MessageSendFragment();
         Bundle args = new Bundle();
         args.putString(USERNAME, username);
-        args.putString(PRIVATE_KEY, privateKey);
         args.putString(MESSAGE, message);
+        args.putStringArrayList(PARTNERS, parnters);
         fragment.setArguments(args);
         return fragment;
     }
@@ -53,8 +62,8 @@ public class MessageSendFragment extends Fragment {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
             mUsername = getArguments().getString(USERNAME);
-            mPrivateKey = getArguments().getString(PRIVATE_KEY);
             mMessage = getArguments().getString(MESSAGE);
+            mPartnerList = getArguments().getStringArrayList(PARTNERS);
         }
     }
 
@@ -66,11 +75,28 @@ public class MessageSendFragment extends Fragment {
         final EditText messageEdit = rootView.findViewById(R.id.messageEditText);
         if(mMessage != null)
             messageEdit.setText(mMessage);
+        if(mPartnerList != null && getActivity() != null){
+            final Spinner partnerSpinner = rootView.findViewById(R.id.recipientSpinner);
+            ArrayAdapter<String> adapter = new ArrayAdapter<String>(getActivity(),
+                    R.layout.support_simple_spinner_dropdown_item, mPartnerList);
+            partnerSpinner.setAdapter(adapter);
+            partnerSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    mPartner = (String) partnerSpinner.getAdapter().getItem(position);
+                }
+
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {
+                    //Do Nothing
+                }
+            });
+        }
         Button setMessageBtn = rootView.findViewById(R.id.setMessageButton);
         setMessageBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onButtonPressed(messageEdit.getText().toString());
+                onButtonPressed(messageEdit.getText().toString(), mPartner);
             }
         });
         return rootView;
@@ -78,9 +104,9 @@ public class MessageSendFragment extends Fragment {
     }
 
 
-    public void onButtonPressed(String message) {
+    public void onButtonPressed(String message, String partner) {
         if (mListener != null) {
-            mListener.onMessageSet(message);
+            mListener.onMessageSet(message,partner);
             mMessage = message;
             //Update args with new message.
             Bundle args = this.getArguments();
@@ -120,6 +146,6 @@ public class MessageSendFragment extends Fragment {
      */
     public interface OnMessageSetListener {
         // TODO: Update argument type and name
-        void onMessageSet(String message);
+        void onMessageSet(String message, String partner);
     }
 }
