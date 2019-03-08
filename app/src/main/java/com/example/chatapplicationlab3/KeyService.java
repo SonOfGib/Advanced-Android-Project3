@@ -16,6 +16,7 @@ import org.json.JSONObject;
 
 
 import java.lang.reflect.Type;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -32,12 +33,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Set;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 
 public class KeyService extends Service {
     private KeyPair keys;
     private String PEMFile;
-    private Cipher cipher;
     private HashMap<String,String> partnerKeys;
     private SharedPreferences prefs;
     private final IBinder mBinder = new LocalBinder();
@@ -103,7 +106,7 @@ public class KeyService extends Service {
 
     //This is for use for OUR key pair only!
     private KeyPair pemToKeys(String pem){
-        String[] stringKeys = pem.split("-----END PRIVATE KEY-----\n-----BEGIN PUBLIC KEY-----\n");
+        String[] stringKeys = pem.split("\n-----END PRIVATE KEY-----\n-----BEGIN PUBLIC KEY-----\n");
         String pemPrivateKey = stringKeys[0].replace("-----BEGIN PRIVATE KEY-----\n","");
         String pemPublicKey = stringKeys[1].replace("-----END PUBLIC KEY-----","");
 
@@ -166,12 +169,14 @@ public class KeyService extends Service {
     public String encrypt(String plainText, String partnerName){
         RSAPublicKey publicKey = getPublicKey(partnerName);
         try{
-            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.DECRYPT_MODE, publicKey);
             byte[] encryptedText = cipher.doFinal(plainText.getBytes());
             return Base64.encodeToString(encryptedText, Base64.DEFAULT);
         }
-        catch (Exception e){
-            e.printStackTrace();
+        catch (NoSuchPaddingException|NoSuchAlgorithmException|
+                BadPaddingException| IllegalBlockSizeException| InvalidKeyException e){
+            Log.e("Crypto error", "Encrypt", e);
             return null;
         }
     }
@@ -184,12 +189,14 @@ public class KeyService extends Service {
     public String decrypt(String cipherText){
         byte[] encryptedText = Base64.decode(cipherText, Base64.DEFAULT);
         try{
+            Cipher cipher = Cipher.getInstance("RSA");
             cipher.init(Cipher.DECRYPT_MODE, keys.getPrivate());
             String decryptedText = new String(cipher.doFinal(encryptedText));
             return decryptedText;
         }
-        catch (Exception e){
-            e.printStackTrace();
+        catch (NoSuchPaddingException|NoSuchAlgorithmException|
+                BadPaddingException| IllegalBlockSizeException| InvalidKeyException e){
+            Log.e("Crypto error", "Decrypt", e);
             return null;
         }
 

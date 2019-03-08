@@ -60,16 +60,21 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     //Message Display Fragment, Message Send Fragment, Key Share Fragment.
 
     private boolean mBounded = false;
+    private String mPartner;
     private KeyService mKeyService;
     private String mMessage;
     private ArrayList<Message> mMessages = new ArrayList<>();
     //mMode keeps track of which fragment is currently visible to the user.
     private int mMode = MESSAGE_RECIEVE_MODE;
 
+    //Work around garbage for service being null after beam is over.
     private boolean mStoreKeyWhenReady = false;
     private String mTempOwner;
     private String mTempPemKey;
-    private String mPartner;
+
+    private boolean mAddMessageWhenReady = false;
+    private String mTempSender;
+    private String mTempContent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -183,7 +188,6 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
                 if(username== null || !username.equals(localUsername)) {
                     //Generate keys with our username.
-                    //TODO Consider saving previous username-keypairs in case the user wants to swap back.
                     mKeyService.generateMyKeys();
                     boolean committed = prefs.edit().putString(USER_PREF_KEY, localUsername).commit();
                     if (committed) {
@@ -294,17 +298,30 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
             String sender = json.getString("from");
             String content = json.getString("message");
             //TODO Decrypt this message!
-            Message message = new Message(sender, content);
-            if (mMessages != null) {
-                mMessages.add(message);
-            } else {
-                mMessages = new ArrayList<>();
-                mMessages.add(message);
+            if(mBounded) {
+                addMessage(sender, content);
             }
-            swapInMessageRecieveFrag();
-        }catch (JSONException e){
+            else{
+                mAddMessageWhenReady = true;
+                mTempSender = sender;
+                mTempContent = content;
+            }
+
+            }catch (JSONException e){
             Log.e("JSON Exception", "Message Problem", e);
         }
+    }
+
+    private void addMessage(String sender, String content) {
+        String plaintext = mKeyService.decrypt(content);
+        Message message = new Message(sender, plaintext);
+        if (mMessages != null) {
+            mMessages.add(message);
+        } else {
+            mMessages = new ArrayList<>();
+            mMessages.add(message);
+        }
+        swapInMessageRecieveFrag();
     }
 
     @Override
@@ -334,13 +351,14 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 //Uh do nothing?
                 Log.d("RECIEVE NDEF WRITE", "User tried to send NDEF in recieve mode.");
                 break;
+
             case MESSAGE_SEND_MODE:
                 //Send currently 'set' message
                 Log.d("SEND NDEF WRITE", "User tried to send NDEF in write mode.");
-                //TODO encrypt message.
                 if(mMessage != null && mPartner != null){
+                    String encryptedMessage = mKeyService.encrypt(mMessage, mPartner);
                     payload = "{\"to\":\"" + mPartner + "\",\"from\":\""+ username + "\",\"message\""+
-                            ":\""+ mMessage +"\"}";
+                            ":\""+ encryptedMessage +"\"}";
                 }
 
                 break;
@@ -357,6 +375,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 }
                 break;
         }
+
         NdefRecord record = NdefRecord.createTextRecord(null, payload);
         NdefMessage msg = new NdefMessage(new NdefRecord[]{record});
 
@@ -388,8 +407,16 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                 if(mTempOwner != null && mTempPemKey != null)
                     mKeyService.storePublicKeyPEM(mTempOwner, mTempPemKey);
             }
+            if(mAddMessageWhenReady){
+                mAddMessageWhenReady = false;
+                if(mTempSender != null && mTempContent != null){
+                    addMessage(mTempSender, mTempContent);
+                }
+            }
         }
     };
+
+
     @Override
     protected void onStop() {
         super.onStop();
