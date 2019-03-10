@@ -164,6 +164,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
                     Toast.LENGTH_SHORT).show();
         } else {
             viewSwap.setEnabled(true);
+            keySwap.setEnabled(true);
             TextView usernameLabel = findViewById(R.id.usernameDisplayLabel);
             usernameLabel.setText(username);
         }
