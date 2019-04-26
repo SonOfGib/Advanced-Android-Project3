@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
         mContext = this;
         Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         mPendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         nfcAdapter.setNdefPushMessageCallback(this, this);
@@ -215,13 +216,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
     @Override
     protected void onResume() {
-        super.onResume();
-        updateUsername();
-        Log.d("mConnection is null?", ""+ (mConnection == null));
-        if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(getIntent().getAction())) {
-            readPayload(getIntent());
-        }
         nfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+        super.onResume();
     }
 
     @Override
@@ -386,7 +382,11 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        setIntent(intent);
+        //updateUsername();
+        Log.d("mConnection is null?", ""+ (mConnection == null));
+        if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
+            readPayload(intent);
+        }
     }
 
     ServiceConnection mConnection = new ServiceConnection() {
@@ -419,8 +419,8 @@ public class MainActivity extends AppCompatActivity implements NfcAdapter.Create
 
 
     @Override
-    protected void onStop() {
-        super.onStop();
+    protected void onDestroy() {
+        super.onDestroy();
         if (mBounded) {
             unbindService(mConnection);
             mBounded = false;
